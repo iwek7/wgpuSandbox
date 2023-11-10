@@ -186,10 +186,10 @@ impl State {
             None, // Trace path
         ).await.unwrap();
 
-        let diffuse_bytes = include_bytes!("grass.png");
+        let diffuse_bytes = include_bytes!("assets/grass.png");
         let diffuse_texture = texture::Texture::from_bytes(&device, &queue, diffuse_bytes, "grass.png").unwrap();
 
-        let challenge_diffused_bytes = include_bytes!("cobblestone.png");
+        let challenge_diffused_bytes = include_bytes!("assets/cobblestone.png");
         let challenge_diffused_texture = texture::Texture::from_bytes(&device, &queue, challenge_diffused_bytes, "cobblestone.png").unwrap();
 
         let texture_bind_group_layout =
@@ -244,7 +244,7 @@ impl State {
         // shortcut: let shader = device.create_shader_module(wgpu::include_wgsl!("shader.wgsl"));
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Shader"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("shader.wgsl").into()),
+            source: wgpu::ShaderSource::Wgsl(include_str!("shaders/shader.wgsl").into()),
         });
 
         let vertex_buffer = device.create_buffer_init(

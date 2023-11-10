@@ -1,5 +1,6 @@
 mod texture;
 mod camera;
+
 use cgmath::prelude::*;
 
 use wgpu::util::DeviceExt;
@@ -186,11 +187,37 @@ impl State {
             None, // Trace path
         ).await.unwrap();
 
+
+        let linear_sampler_desc = wgpu::SamplerDescriptor {
+            address_mode_u: wgpu::AddressMode::ClampToEdge,
+            address_mode_v: wgpu::AddressMode::ClampToEdge,
+            address_mode_w: wgpu::AddressMode::ClampToEdge,
+            mag_filter: wgpu::FilterMode::Linear,
+            min_filter: wgpu::FilterMode::Nearest,
+            mipmap_filter: wgpu::FilterMode::Nearest,
+            ..Default::default()
+        };
+
+        let nearest_sampler_desc = wgpu::SamplerDescriptor {
+            address_mode_u: wgpu::AddressMode::ClampToEdge,
+            address_mode_v: wgpu::AddressMode::ClampToEdge,
+            address_mode_w: wgpu::AddressMode::ClampToEdge,
+            mag_filter: wgpu::FilterMode::Nearest,
+            min_filter: wgpu::FilterMode::Nearest,
+            mipmap_filter: wgpu::FilterMode::Nearest,
+            ..Default::default()
+        };
+
         let diffuse_bytes = include_bytes!("assets/grass.png");
-        let diffuse_texture = texture::Texture::from_bytes(&device, &queue, diffuse_bytes, "grass.png").unwrap();
+        let diffuse_texture = Texture::from_bytes(
+            &device, &queue, diffuse_bytes, "grass.png", &linear_sampler_desc
+        ).unwrap();
+
 
         let challenge_diffused_bytes = include_bytes!("assets/cobblestone.png");
-        let challenge_diffused_texture = texture::Texture::from_bytes(&device, &queue, challenge_diffused_bytes, "cobblestone.png").unwrap();
+        let challenge_diffused_texture = Texture::from_bytes(
+            &device, &queue, challenge_diffused_bytes, "cobblestone.png", &nearest_sampler_desc
+        ).unwrap();
 
         let texture_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -220,7 +247,7 @@ impl State {
         let diffuse_bind_group = create_bind_group(&device, &texture_bind_group_layout,
                                                    "diffuse tx", &diffuse_texture);
         let challenge_diffused_bind_group = create_bind_group(&device, &texture_bind_group_layout,
-                                                   "challenge tx", &challenge_diffused_texture);
+                                                              "challenge tx", &challenge_diffused_texture);
 
         let surface_caps = surface.get_capabilities(&adapter);
         // Shader code in this tutorial assumes an sRGB surface texture. Using a different
@@ -317,8 +344,6 @@ impl State {
         });
 
 
-
-
         let instances = (0..NUM_INSTANCES_PER_ROW).flat_map(|z| {
             (0..NUM_INSTANCES_PER_ROW).map(move |x| {
                 let position = cgmath::Vector3 { x: x as f32, y: 0.0, z: z as f32 } - INSTANCE_DISPLACEMENT;
@@ -332,7 +357,8 @@ impl State {
                 };
 
                 Instance {
-                    position, rotation,
+                    position,
+                    rotation,
                 }
             })
         }).collect::<Vec<_>>();
@@ -434,7 +460,7 @@ impl State {
             device: &wgpu::Device,
             layout: &wgpu::BindGroupLayout,
             label: &str,
-            texture: &Texture
+            texture: &Texture,
         ) -> wgpu::BindGroup {
             device.create_bind_group(
                 &wgpu::BindGroupDescriptor {

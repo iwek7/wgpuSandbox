@@ -238,8 +238,8 @@ impl State {
             &device, &queue, challenge_diffused_bytes, "cobblestone.png",
         ).unwrap();
 
-
-        let texture_bind_group_layout =
+        // As I understand this informs shader what uniforms are set where and what is their size
+        let bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 entries: &[
                     wgpu::BindGroupLayoutEntry {
@@ -273,11 +273,11 @@ impl State {
             });
 
         let diffuse_bind_group = create_bind_group(
-            &device, &texture_bind_group_layout, "diffuse tx", &diffuse_texture,
+            &device, &bind_group_layout, "diffuse tx", &diffuse_texture,
             &linear_sampler, &nearest_sampler,
         );
         let challenge_diffused_bind_group = create_bind_group(
-            &device, &texture_bind_group_layout, "challenge tx", &challenge_diffused_texture,
+            &device, &bind_group_layout, "challenge tx", &challenge_diffused_texture,
             &linear_sampler, &nearest_sampler
         );
 
@@ -409,7 +409,7 @@ impl State {
             &wgpu::PipelineLayoutDescriptor {
                 label: Some("Render Pipeline Layout"),
                 bind_group_layouts: &[
-                    &texture_bind_group_layout,
+                    &bind_group_layout,
                     &camera_bind_group_layout,
                 ],
                 push_constant_ranges: &[],

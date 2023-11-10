@@ -49,22 +49,24 @@ var t_diffuse: texture_2d<f32>;
 var linear_sampler: sampler;
 @group(0) @binding(2)
 var nearest_sampler: sampler;
-//var samplers: vec2<sampler>
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
-
-//    var sampler_to_use: sampler;
-//    if(in.use_linear_sampler == 1) {
-//      sampler_to_use = linear_sampler;
-//    } else {
-//      sampler_to_use = nearest_sampler;
-//    }
-
+    // See this to know why I use textureSampleLevel instead of textureSample.
+    // https://stackoverflow.com/questions/77100370/how-to-conditionally-sample-a-texture-in-wgsl
+    //
+    // Apparently you can't use textureSample in conditional logic because of some Uniformity requirements.
+    // See this https://www.w3.org/TR/WGSL/#uniformity
+    //
+    // As I vaugly understand it has something to do with the fact that this code can't be run
+    // trully concurrently?
     if(in.use_linear_sampler == 1) {
-       return textureSample(t_diffuse, linear_sampler, in.tex_coords);
+    // as I understand I have one minimap per texture for now (texture itself) so I set 0 here
+    // but maybe there are no minimaps and it defaults to sampling from texture?
+    // who knows, for now I do not know almost anything about minimaps
+       return textureSampleLevel(t_diffuse, linear_sampler, in.tex_coords, 0.0);
     } else {
-
+       return textureSampleLevel(t_diffuse, nearest_sampler, in.tex_coords, 0.0);
     }
 }
 

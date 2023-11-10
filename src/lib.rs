@@ -22,6 +22,14 @@ struct Instance {
     rotation: cgmath::Quaternion<f32>,
 }
 
+impl Instance {
+    fn to_raw(&self) -> InstanceRaw {
+        InstanceRaw {
+            model: (cgmath::Matrix4::from_translation(self.position) * cgmath::Matrix4::from(self.rotation)).into(),
+        }
+    }
+}
+
 #[repr(C)]
 #[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 struct InstanceRaw {
@@ -63,16 +71,6 @@ impl InstanceRaw {
                     format: wgpu::VertexFormat::Float32x4,
                 },
             ],
-        }
-    }
-}
-
-
-
-impl Instance {
-    fn to_raw(&self) -> InstanceRaw {
-        InstanceRaw {
-            model: (cgmath::Matrix4::from_translation(self.position) * cgmath::Matrix4::from(self.rotation)).into(),
         }
     }
 }

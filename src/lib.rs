@@ -238,6 +238,7 @@ impl State {
             &device, &queue, challenge_diffused_bytes, "cobblestone.png",
         ).unwrap();
 
+
         let texture_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 entries: &[
@@ -620,7 +621,6 @@ pub async fn run() {
                 window_id,
             } if window_id == state.window().id() => {
                 if !state.input(event) {
-                    // UPDATED!
                     match event {
                         WindowEvent::CloseRequested | WindowEvent::KeyboardInput {
                             input:

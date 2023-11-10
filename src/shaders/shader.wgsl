@@ -49,6 +49,7 @@ var t_diffuse: texture_2d<f32>;
 var linear_sampler: sampler;
 @group(0) @binding(2)
 var nearest_sampler: sampler;
+//var samplers: vec2<sampler>
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
@@ -63,7 +64,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     if(in.use_linear_sampler == 1) {
        return textureSample(t_diffuse, linear_sampler, in.tex_coords);
     } else {
-       return textureSample(t_diffuse, nearest_sampler, in.tex_coords);
+
     }
 }
 

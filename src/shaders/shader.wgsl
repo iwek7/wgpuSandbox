@@ -9,8 +9,8 @@ struct InstanceInput {
     @location(6) model_matrix_1: vec4<f32>,
     @location(7) model_matrix_2: vec4<f32>,
     @location(8) model_matrix_3: vec4<f32>,
+    @location(9) use_linear_sampler: i32
 };
-
 
 struct VertexInput {
     @location(0) position: vec3<f32>,
@@ -20,6 +20,7 @@ struct VertexInput {
 struct VertexOutput {
     @builtin(position) clip_position: vec4<f32>,
     @location(0) tex_coords: vec2<f32>,
+    @location(1) use_linear_sampler: i32
 };
 
 @vertex
@@ -37,6 +38,7 @@ fn vs_main(
     var out: VertexOutput;
     out.tex_coords = model.tex_coords;
     out.clip_position = camera.view_proj * model_matrix * vec4<f32>(model.position, 1.0);
+    out.use_linear_sampler = instance.use_linear_sampler;
     return out;
 }
 
@@ -44,11 +46,25 @@ fn vs_main(
 @group(0) @binding(0)
 var t_diffuse: texture_2d<f32>;
 @group(0) @binding(1)
-var s_diffuse: sampler;
+var linear_sampler: sampler;
+@group(0) @binding(2)
+var nearest_sampler: sampler;
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
-     return textureSample(t_diffuse, s_diffuse, in.tex_coords);
+
+//    var sampler_to_use: sampler;
+//    if(in.use_linear_sampler == 1) {
+//      sampler_to_use = linear_sampler;
+//    } else {
+//      sampler_to_use = nearest_sampler;
+//    }
+
+    if(in.use_linear_sampler == 1) {
+       return textureSample(t_diffuse, linear_sampler, in.tex_coords);
+    } else {
+       return textureSample(t_diffuse, nearest_sampler, in.tex_coords);
+    }
 }
 
 

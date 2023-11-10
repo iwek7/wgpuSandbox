@@ -4,7 +4,6 @@ use anyhow::*;
 pub struct Texture {
     pub texture: wgpu::Texture,
     pub view: wgpu::TextureView,
-    pub sampler: wgpu::Sampler,
 }
 
 impl Texture {
@@ -13,18 +12,16 @@ impl Texture {
         queue: &wgpu::Queue,
         bytes: &[u8],
         label: &str,
-        sampler_desc: &wgpu::SamplerDescriptor
     ) -> Result<Self> {
         let img = image::load_from_memory(bytes)?;
-        Self::from_image(device, queue, &img, Some(label), sampler_desc)
+        Self::from_image(device, queue, &img, Some(label))
     }
 
     pub fn from_image(
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         img: &image::DynamicImage,
-        label: Option<&str>,
-        sampler_desc: &wgpu::SamplerDescriptor
+        label: Option<&str>
     ) -> Result<Self> {
         let rgba = img.to_rgba8();
         let dimensions = img.dimensions();
@@ -64,8 +61,7 @@ impl Texture {
         );
 
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-        let sampler = device.create_sampler(sampler_desc);
 
-        Ok(Self { texture, view, sampler })
+        Ok(Self { texture, view })
     }
 }

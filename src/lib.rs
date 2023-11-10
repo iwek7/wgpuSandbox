@@ -21,12 +21,20 @@ const INSTANCE_DISPLACEMENT: cgmath::Vector3<f32> = cgmath::Vector3::new(NUM_INS
 struct Instance {
     position: cgmath::Vector3<f32>,
     rotation: cgmath::Quaternion<f32>,
+    use_linear_sampler: bool
 }
 
 impl Instance {
     fn to_raw(&self) -> InstanceRaw {
         InstanceRaw {
             model: (cgmath::Matrix4::from_translation(self.position) * cgmath::Matrix4::from(self.rotation)).into(),
+            use_linear_sampler: {
+                if self.use_linear_sampler {
+                    1
+                } else {
+                    0
+                }
+            }
         }
     }
 }
@@ -35,6 +43,7 @@ impl Instance {
 #[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 struct InstanceRaw {
     model: [[f32; 4]; 4],
+    use_linear_sampler: i32
 }
 
 impl InstanceRaw {
@@ -71,6 +80,11 @@ impl InstanceRaw {
                     shader_location: 8,
                     format: wgpu::VertexFormat::Float32x4,
                 },
+                wgpu::VertexAttribute {
+                    offset: mem::size_of::<[f32; 16]>() as wgpu::BufferAddress,
+                    shader_location: 9,
+                    format: wgpu::VertexFormat::Sint32,
+                }
             ],
         }
     }
@@ -143,6 +157,9 @@ struct State {
     camera_controller: CameraController,
     instances: Vec<Instance>,
     instance_buffer: wgpu::Buffer,
+    nearest_sampler: wgpu::Sampler,
+    linear_sampler: wgpu::Sampler,
+
 }
 
 impl State {
@@ -187,7 +204,6 @@ impl State {
             None, // Trace path
         ).await.unwrap();
 
-
         let linear_sampler_desc = wgpu::SamplerDescriptor {
             address_mode_u: wgpu::AddressMode::ClampToEdge,
             address_mode_v: wgpu::AddressMode::ClampToEdge,
@@ -208,15 +224,18 @@ impl State {
             ..Default::default()
         };
 
+        let linear_sampler = device.create_sampler(&linear_sampler_desc);
+        let nearest_sampler = device.create_sampler(&nearest_sampler_desc);
+
         let diffuse_bytes = include_bytes!("assets/grass.png");
         let diffuse_texture = Texture::from_bytes(
-            &device, &queue, diffuse_bytes, "grass.png", &linear_sampler_desc
+            &device, &queue, diffuse_bytes, "grass.png",
         ).unwrap();
 
 
         let challenge_diffused_bytes = include_bytes!("assets/cobblestone.png");
         let challenge_diffused_texture = Texture::from_bytes(
-            &device, &queue, challenge_diffused_bytes, "cobblestone.png", &nearest_sampler_desc
+            &device, &queue, challenge_diffused_bytes, "cobblestone.png",
         ).unwrap();
 
         let texture_bind_group_layout =
@@ -240,14 +259,26 @@ impl State {
                         ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
                         count: None,
                     },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 2,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        // This should match the filterable field of the
+                        // corresponding Texture entry above.
+                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                        count: None,
+                    },
                 ],
                 label: Some("texture_bind_group_layout"),
             });
 
-        let diffuse_bind_group = create_bind_group(&device, &texture_bind_group_layout,
-                                                   "diffuse tx", &diffuse_texture);
-        let challenge_diffused_bind_group = create_bind_group(&device, &texture_bind_group_layout,
-                                                              "challenge tx", &challenge_diffused_texture);
+        let diffuse_bind_group = create_bind_group(
+            &device, &texture_bind_group_layout, "diffuse tx", &diffuse_texture,
+            &linear_sampler, &nearest_sampler,
+        );
+        let challenge_diffused_bind_group = create_bind_group(
+            &device, &texture_bind_group_layout, "challenge tx", &challenge_diffused_texture,
+            &linear_sampler, &nearest_sampler
+        );
 
         let surface_caps = surface.get_capabilities(&adapter);
         // Shader code in this tutorial assumes an sRGB surface texture. Using a different
@@ -359,6 +390,7 @@ impl State {
                 Instance {
                     position,
                     rotation,
+                    use_linear_sampler: z % 2 == 0
                 }
             })
         }).collect::<Vec<_>>();
@@ -454,6 +486,8 @@ impl State {
             camera_controller,
             instances,
             instance_buffer,
+            linear_sampler,
+            nearest_sampler,
         };
 
         fn create_bind_group(
@@ -461,6 +495,8 @@ impl State {
             layout: &wgpu::BindGroupLayout,
             label: &str,
             texture: &Texture,
+            linear_sampler: &wgpu::Sampler,
+            nearest_sampler: &wgpu::Sampler,
         ) -> wgpu::BindGroup {
             device.create_bind_group(
                 &wgpu::BindGroupDescriptor {
@@ -472,7 +508,11 @@ impl State {
                         },
                         wgpu::BindGroupEntry {
                             binding: 1,
-                            resource: wgpu::BindingResource::Sampler(&texture.sampler),
+                            resource: wgpu::BindingResource::Sampler(linear_sampler),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 2,
+                            resource: wgpu::BindingResource::Sampler(nearest_sampler),
                         }
                     ],
                     label: Some(label),

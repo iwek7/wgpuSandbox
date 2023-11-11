@@ -1,5 +1,8 @@
-mod texture;
+mod tx;
 mod camera;
+mod bind_group_array;
+mod globals;
+mod instance;
 
 use cgmath::prelude::*;
 
@@ -11,84 +14,14 @@ use winit::{
 };
 
 use winit::window::Window;
+use crate::bind_group_array::{create_bind_group, create_bind_group_layout};
 use crate::camera::{Camera, CameraController, CameraUniform};
-use crate::texture::Texture;
+use crate::instance::InstanceRaw;
+use crate::tx::Texture;
 
 const NUM_INSTANCES_PER_ROW: u32 = 10;
 const INSTANCE_DISPLACEMENT: cgmath::Vector3<f32> = cgmath::Vector3::new(NUM_INSTANCES_PER_ROW as f32 * 0.5, 0.0, NUM_INSTANCES_PER_ROW as f32 * 0.5);
 
-
-struct Instance {
-    position: cgmath::Vector3<f32>,
-    rotation: cgmath::Quaternion<f32>,
-    use_linear_sampler: bool
-}
-
-impl Instance {
-    fn to_raw(&self) -> InstanceRaw {
-        InstanceRaw {
-            model: (cgmath::Matrix4::from_translation(self.position) * cgmath::Matrix4::from(self.rotation)).into(),
-            use_linear_sampler: {
-                if self.use_linear_sampler {
-                    1
-                } else {
-                    0
-                }
-            }
-        }
-    }
-}
-
-#[repr(C)]
-#[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
-struct InstanceRaw {
-    model: [[f32; 4]; 4],
-    use_linear_sampler: i32
-}
-
-impl InstanceRaw {
-    fn desc() -> wgpu::VertexBufferLayout<'static> {
-        use std::mem;
-        wgpu::VertexBufferLayout {
-            array_stride: mem::size_of::<InstanceRaw>() as wgpu::BufferAddress,
-            // We need to switch from using a step mode of Vertex to Instance
-            // This means that our shaders will only change to use the next
-            // instance when the shader starts processing a new instance
-            step_mode: wgpu::VertexStepMode::Instance,
-            attributes: &[
-                // A mat4 takes up 4 vertex slots as it is technically 4 vec4s. We need to define a slot
-                // for each vec4. We'll have to reassemble the mat4 in the shader.
-                wgpu::VertexAttribute {
-                    offset: 0,
-                    // While our vertex shader only uses locations 0, and 1 now, in later tutorials we'll
-                    // be using 2, 3, and 4, for Vertex. We'll start at slot 5 not conflict with them later
-                    shader_location: 5,
-                    format: wgpu::VertexFormat::Float32x4,
-                },
-                wgpu::VertexAttribute {
-                    offset: mem::size_of::<[f32; 4]>() as wgpu::BufferAddress,
-                    shader_location: 6,
-                    format: wgpu::VertexFormat::Float32x4,
-                },
-                wgpu::VertexAttribute {
-                    offset: mem::size_of::<[f32; 8]>() as wgpu::BufferAddress,
-                    shader_location: 7,
-                    format: wgpu::VertexFormat::Float32x4,
-                },
-                wgpu::VertexAttribute {
-                    offset: mem::size_of::<[f32; 12]>() as wgpu::BufferAddress,
-                    shader_location: 8,
-                    format: wgpu::VertexFormat::Float32x4,
-                },
-                wgpu::VertexAttribute {
-                    offset: mem::size_of::<[f32; 16]>() as wgpu::BufferAddress,
-                    shader_location: 9,
-                    format: wgpu::VertexFormat::Sint32,
-                }
-            ],
-        }
-    }
-}
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
@@ -145,17 +78,18 @@ struct State {
     index_buffer: wgpu::Buffer,
     num_indices: u32,
     cursor_in: bool,
-    diffuse_bind_group: wgpu::BindGroup,
     diffuse_texture: Texture,
-    challenge_diffused_bind_group: wgpu::BindGroup,
     challenge_diffused_texture: Texture,
     texture_swap: bool,
+
+    bind_group: wgpu::BindGroup,
+
     camera: Camera,
     camera_uniform: CameraUniform,
     camera_buffer: wgpu::Buffer,
     camera_bind_group: wgpu::BindGroup,
     camera_controller: CameraController,
-    instances: Vec<Instance>,
+    instances: Vec<instance::CustomInstance>,
     instance_buffer: wgpu::Buffer,
     nearest_sampler: wgpu::Sampler,
     linear_sampler: wgpu::Sampler,
@@ -239,46 +173,12 @@ impl State {
         ).unwrap();
 
         // As I understand this informs shader what uniforms are set where and what is their size
-        let bind_group_layout =
-            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                entries: &[
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: wgpu::ShaderStages::FRAGMENT,
-                        ty: wgpu::BindingType::Texture {
-                            multisampled: false,
-                            view_dimension: wgpu::TextureViewDimension::D2,
-                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                        },
-                        count: None,
-                    },
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 1,
-                        visibility: wgpu::ShaderStages::FRAGMENT,
-                        // This should match the filterable field of the
-                        // corresponding Texture entry above.
-                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                        count: None,
-                    },
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 2,
-                        visibility: wgpu::ShaderStages::FRAGMENT,
-                        // This should match the filterable field of the
-                        // corresponding Texture entry above.
-                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                        count: None,
-                    },
-                ],
-                label: Some("texture_bind_group_layout"),
-            });
+        let bind_group_layout = create_bind_group_layout(&device);
 
-        let diffuse_bind_group = create_bind_group(
-            &device, &bind_group_layout, "diffuse tx", &diffuse_texture,
+        let bind_group = create_bind_group(
+            &device, &bind_group_layout, "multi texture rendering bind group",
+            &[&diffuse_texture.view, &challenge_diffused_texture.view],
             &linear_sampler, &nearest_sampler,
-        );
-        let challenge_diffused_bind_group = create_bind_group(
-            &device, &bind_group_layout, "challenge tx", &challenge_diffused_texture,
-            &linear_sampler, &nearest_sampler
         );
 
         let surface_caps = surface.get_capabilities(&adapter);
@@ -388,14 +288,21 @@ impl State {
                     cgmath::Quaternion::from_axis_angle(position.normalize(), cgmath::Deg(45.0))
                 };
 
-                Instance {
+                instance::CustomInstance {
                     position,
                     rotation,
-                    use_linear_sampler: z % 2 == 0
+                    use_linear_sampler: z % 2 == 0,
+                    texture_index: {
+                        if z % 2 == 0 {
+                            0
+                        } else {
+                            1
+                        }
+                    },
                 }
             })
         }).collect::<Vec<_>>();
-        let instance_data = instances.iter().map(Instance::to_raw).collect::<Vec<_>>();
+        let instance_data = instances.iter().map(instance::CustomInstance::to_raw).collect::<Vec<_>>();
         let instance_buffer = device.create_buffer_init(
             &wgpu::util::BufferInitDescriptor {
                 label: Some("Instance Buffer"),
@@ -475,11 +382,10 @@ impl State {
             index_buffer,
             num_indices,
             cursor_in,
-            diffuse_bind_group,
             diffuse_texture,
-            challenge_diffused_bind_group,
             challenge_diffused_texture,
             texture_swap,
+            bind_group,
             camera,
             camera_uniform,
             camera_buffer,
@@ -490,36 +396,6 @@ impl State {
             linear_sampler,
             nearest_sampler,
         };
-
-        fn create_bind_group(
-            device: &wgpu::Device,
-            layout: &wgpu::BindGroupLayout,
-            label: &str,
-            texture: &Texture,
-            linear_sampler: &wgpu::Sampler,
-            nearest_sampler: &wgpu::Sampler,
-        ) -> wgpu::BindGroup {
-            device.create_bind_group(
-                &wgpu::BindGroupDescriptor {
-                    layout,
-                    entries: &[
-                        wgpu::BindGroupEntry {
-                            binding: 0,
-                            resource: wgpu::BindingResource::TextureView(&texture.view),
-                        },
-                        wgpu::BindGroupEntry {
-                            binding: 1,
-                            resource: wgpu::BindingResource::Sampler(linear_sampler),
-                        },
-                        wgpu::BindGroupEntry {
-                            binding: 2,
-                            resource: wgpu::BindingResource::Sampler(nearest_sampler),
-                        }
-                    ],
-                    label: Some(label),
-                }
-            )
-        }
     }
 
     pub fn window(&self) -> &Window {
@@ -583,12 +459,7 @@ impl State {
             });
 
             render_pass.set_pipeline(&self.render_pipeline);
-            let bind_group = if self.texture_swap {
-                &self.challenge_diffused_bind_group
-            } else {
-                &self.diffuse_bind_group
-            };
-            render_pass.set_bind_group(0, bind_group, &[]);
+            render_pass.set_bind_group(0, &self.bind_group, &[]);
             render_pass.set_bind_group(1, &self.camera_bind_group, &[]);
             render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
             render_pass.set_vertex_buffer(1, self.instance_buffer.slice(..));

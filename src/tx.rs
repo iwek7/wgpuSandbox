@@ -63,7 +63,7 @@ impl TextureWrapper {
 
         let view_descriptor = wgpu::TextureViewDescriptor {
             format: Some(globals::TEXTURE_FORMAT),
-            dimension: Some(wgpu::TextureViewDimension::D2Array),
+            dimension: Some(wgpu::TextureViewDimension::D2),
             ..Default::default()
         };
         let view = texture.create_view(&view_descriptor);

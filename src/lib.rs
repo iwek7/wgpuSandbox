@@ -177,7 +177,7 @@ impl State {
 
         let bind_group_layout = create_bind_group_layout(&device);
 
-        let textures_slice = &[&diffuse_texture.view, &challenge_diffused_texture.view];
+        let textures_slice = &[&challenge_diffused_texture.view, &diffuse_texture.view];
         let bind_group = create_bind_group(
             &device, &bind_group_layout, "multi texture rendering bind group",
             textures_slice, &linear_sampler, &nearest_sampler,
@@ -296,9 +296,9 @@ impl State {
                     use_linear_sampler: z % 2 == 0,
                     texture_index: {
                         if z % 2 == 0 {
-                            0
-                        } else {
                             1
+                        } else {
+                            0
                         }
                     },
                 }

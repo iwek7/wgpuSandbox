@@ -14,7 +14,7 @@ pub fn create_bind_group(
     device: &wgpu::Device,
     layout: &wgpu::BindGroupLayout,
     label: &str,
-    textures: &[&wgpu::TextureView],
+    texture_view: &wgpu::TextureView,
     linear_sampler: &wgpu::Sampler,
     nearest_sampler: &wgpu::Sampler,
 ) -> wgpu::BindGroup {
@@ -24,7 +24,7 @@ pub fn create_bind_group(
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: wgpu::BindingResource::TextureViewArray(textures),
+                    resource: wgpu::BindingResource::TextureView(texture_view),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,

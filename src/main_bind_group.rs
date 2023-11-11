@@ -1,7 +1,4 @@
 use std::num::NonZeroU32;
-use wgpu::{StorageTextureAccess};
-use winit::window::CursorIcon::Default;
-use crate::{globals,};
 
 // My understanding of bind group is that it simply contains all the data that is entering shader.
 // By using bind group we can describe what enters the shader:
@@ -22,6 +19,13 @@ pub fn create_bind_group(
         &wgpu::BindGroupDescriptor {
             layout,
             entries: &[
+                // As of now, WGPU does not support binding an array of separate texture bindings for dynamic indexing within a single shader or draw call.
+                // Refer to this issue for more details: https://github.com/gpuweb/gpuweb/issues/822.
+                // This limitation means that we cannot dynamically choose among an array of separate, non-uniform textures (e.g., textures with varying sizes) in a shader.
+                //
+                // The workaround is to create a single texture that contains multiple layers, known as a texture array. This texture array corresponds to 'texture_2d_array' in WGSL.
+                // Each layer in this texture array can contain different image data, but all layers must have the same dimensions.
+                // The shader can then dynamically index these layers within a single draw call.
                 wgpu::BindGroupEntry {
                     binding: 0,
                     resource: wgpu::BindingResource::TextureView(texture_view),

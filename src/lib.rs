@@ -78,8 +78,7 @@ struct State {
     index_buffer: wgpu::Buffer,
     num_indices: u32,
     cursor_in: bool,
-    diffuse_texture: TextureWrapper,
-    challenge_diffused_texture: TextureWrapper,
+    layered_texture: TextureWrapper,
     texture_swap: bool,
 
     // this is responsible for drawing everything but camera
@@ -163,24 +162,19 @@ impl State {
         let linear_sampler = device.create_sampler(&linear_sampler_desc);
         let nearest_sampler = device.create_sampler(&nearest_sampler_desc);
 
-        let diffuse_bytes = include_bytes!("assets/grass.png");
-        let diffuse_texture = TextureWrapper::from_bytes(
-            &device, &queue, diffuse_bytes, "grass.png",
-        ).unwrap();
+        let grass_bytes = include_bytes!("assets/grass.png");
+        let cobblestone_bytes = include_bytes!("assets/cobblestone.png");
 
-
-        let challenge_diffused_bytes = include_bytes!("assets/cobblestone.png");
-        let challenge_diffused_texture = TextureWrapper::from_bytes(
-            &device, &queue, challenge_diffused_bytes, "cobblestone.png",
+        let layered_texture = TextureWrapper::from_bytes(
+            &device, &queue, grass_bytes, cobblestone_bytes, "grass.png",
         ).unwrap();
 
 
         let bind_group_layout = create_bind_group_layout(&device);
 
-        let textures_slice = &[&challenge_diffused_texture.view, &diffuse_texture.view];
         let bind_group = create_bind_group(
             &device, &bind_group_layout, "multi texture rendering bind group",
-            textures_slice, &linear_sampler, &nearest_sampler,
+            &layered_texture.view, &linear_sampler, &nearest_sampler,
         );
 
         let surface_caps = surface.get_capabilities(&adapter);
@@ -384,8 +378,7 @@ impl State {
             index_buffer,
             num_indices,
             cursor_in,
-            diffuse_texture,
-            challenge_diffused_texture,
+            layered_texture,
             texture_swap,
             main_bind_group: bind_group,
             camera,

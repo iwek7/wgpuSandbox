@@ -2,12 +2,12 @@ use image::GenericImageView;
 use anyhow::*;
 use crate::globals;
 
-pub struct Texture {
+pub struct TextureWrapper {
     pub texture: wgpu::Texture,
     pub view: wgpu::TextureView,
 }
 
-impl Texture {
+impl TextureWrapper {
     pub fn from_bytes(
         device: &wgpu::Device,
         queue: &wgpu::Queue,
@@ -22,7 +22,7 @@ impl Texture {
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         img: &image::DynamicImage,
-        label: Option<&str>
+        label: Option<&str>,
     ) -> Result<Self> {
         let rgba = img.to_rgba8();
         let dimensions = img.dimensions();
@@ -40,7 +40,9 @@ impl Texture {
                 sample_count: 1,
                 dimension: wgpu::TextureDimension::D2,
                 format: globals::TEXTURE_FORMAT,
-                usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+                usage: wgpu::TextureUsages::TEXTURE_BINDING |
+                    wgpu::TextureUsages::COPY_DST |
+                    wgpu::TextureUsages::STORAGE_BINDING,
                 view_formats: &[],
             }
         );

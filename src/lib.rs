@@ -1,6 +1,6 @@
 mod tx;
 mod camera;
-mod bind_group_array;
+mod main_bind_group;
 mod globals;
 mod instance;
 
@@ -14,10 +14,10 @@ use winit::{
 };
 
 use winit::window::Window;
-use crate::bind_group_array::{create_bind_group, create_bind_group_layout};
+use crate::main_bind_group::{create_bind_group, create_bind_group_layout};
 use crate::camera::{Camera, CameraController, CameraUniform};
 use crate::instance::InstanceRaw;
-use crate::tx::Texture;
+use crate::tx::TextureWrapper;
 
 const NUM_INSTANCES_PER_ROW: u32 = 10;
 const INSTANCE_DISPLACEMENT: cgmath::Vector3<f32> = cgmath::Vector3::new(NUM_INSTANCES_PER_ROW as f32 * 0.5, 0.0, NUM_INSTANCES_PER_ROW as f32 * 0.5);
@@ -78,11 +78,12 @@ struct State {
     index_buffer: wgpu::Buffer,
     num_indices: u32,
     cursor_in: bool,
-    diffuse_texture: Texture,
-    challenge_diffused_texture: Texture,
+    diffuse_texture: TextureWrapper,
+    challenge_diffused_texture: TextureWrapper,
     texture_swap: bool,
 
-    bind_group: wgpu::BindGroup,
+    // this is responsible for drawing everything but camera
+    main_bind_group: wgpu::BindGroup,
 
     camera: Camera,
     camera_uniform: CameraUniform,
@@ -125,7 +126,8 @@ impl State {
 
         let (device, queue) = adapter.request_device(
             &wgpu::DeviceDescriptor {
-                features: wgpu::Features::empty(),
+                // Those features features are required if we want to bind storage array (texture array) as uniform.
+                features: wgpu::Features::TEXTURE_BINDING_ARRAY | wgpu::Features::STORAGE_RESOURCE_BINDING_ARRAY,
                 // WebGL doesn't support all of wgpu's features, so if
                 // we're building for the web we'll have to disable some.
                 limits: if cfg!(target_arch = "wasm32") {
@@ -162,23 +164,23 @@ impl State {
         let nearest_sampler = device.create_sampler(&nearest_sampler_desc);
 
         let diffuse_bytes = include_bytes!("assets/grass.png");
-        let diffuse_texture = Texture::from_bytes(
+        let diffuse_texture = TextureWrapper::from_bytes(
             &device, &queue, diffuse_bytes, "grass.png",
         ).unwrap();
 
 
         let challenge_diffused_bytes = include_bytes!("assets/cobblestone.png");
-        let challenge_diffused_texture = Texture::from_bytes(
+        let challenge_diffused_texture = TextureWrapper::from_bytes(
             &device, &queue, challenge_diffused_bytes, "cobblestone.png",
         ).unwrap();
 
-        // As I understand this informs shader what uniforms are set where and what is their size
+
         let bind_group_layout = create_bind_group_layout(&device);
 
+        let textures_slice = &[&diffuse_texture.view, &challenge_diffused_texture.view];
         let bind_group = create_bind_group(
             &device, &bind_group_layout, "multi texture rendering bind group",
-            &[&diffuse_texture.view, &challenge_diffused_texture.view],
-            &linear_sampler, &nearest_sampler,
+            textures_slice, &linear_sampler, &nearest_sampler,
         );
 
         let surface_caps = surface.get_capabilities(&adapter);
@@ -385,7 +387,7 @@ impl State {
             diffuse_texture,
             challenge_diffused_texture,
             texture_swap,
-            bind_group,
+            main_bind_group: bind_group,
             camera,
             camera_uniform,
             camera_buffer,
@@ -459,7 +461,7 @@ impl State {
             });
 
             render_pass.set_pipeline(&self.render_pipeline);
-            render_pass.set_bind_group(0, &self.bind_group, &[]);
+            render_pass.set_bind_group(0, &self.main_bind_group, &[]);
             render_pass.set_bind_group(1, &self.camera_bind_group, &[]);
             render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
             render_pass.set_vertex_buffer(1, self.instance_buffer.slice(..));

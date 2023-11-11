@@ -1,5 +1,13 @@
+use std::num::NonZeroU32;
 use wgpu::{StorageTextureAccess};
 use crate::{globals,};
+
+// My understanding of bind group is that it simply contains all the data that is entering shader.
+// By using bind group we can describe what enters the shader:
+// - as uniforms
+// - as vertex shader input
+
+
 
 pub fn create_bind_group(
     device: &wgpu::Device,
@@ -47,9 +55,9 @@ pub fn create_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout 
                     // see const for doc
                     format: globals::TEXTURE_FORMAT,
                     // It is another thing that informs GPU about data layout, I think.
-                    view_dimension: Default::default(),
+                    view_dimension: wgpu::TextureViewDimension::D2,
                 },
-                count: None,
+                count: Some(NonZeroU32::try_from(2).unwrap()),
             },
             wgpu::BindGroupLayoutEntry {
                 binding: 1,

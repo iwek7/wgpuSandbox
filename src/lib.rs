@@ -165,12 +165,21 @@ impl State {
         let grass_bytes = include_bytes!("assets/grass.png");
         let cobblestone_bytes = include_bytes!("assets/cobblestone.png");
 
-        let layered_texture = TextureWrapper::from_bytes(
-            &device, &queue, grass_bytes, cobblestone_bytes, "grass.png",
+        // So here apparently include_bytes! returns type &[u8; N] and it actually picks up file
+        // in compile time so N is number of actual bytes in image (crazy!).
+        // Therefore provided byte arrays have different types (one is &[u8; x], and other is &[u8; y])
+        // by taking slices here we convert them to common type.
+        // Rust blows my mind sometimes.
+        let all_texture_bytes = [&grass_bytes[..], &cobblestone_bytes[..]];
+        let layered_texture = TextureWrapper::multilayer_from_bytes(
+            &device, &queue, &all_texture_bytes, "grass.png",
         ).unwrap();
 
 
-        let bind_group_layout = create_bind_group_layout(&device);
+        let bind_group_layout = create_bind_group_layout(
+            &device,
+            all_texture_bytes.len() as u32,
+        );
 
         let bind_group = create_bind_group(
             &device, &bind_group_layout, "multi texture rendering bind group",

@@ -63,9 +63,6 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     //
     // As I vaugly understand it has something to do with the fact that this code can't be run
     // trully concurrently?
-
-
-
     if(in.use_linear_sampler == 1) {
     // as I understand I have one minimap per texture for now (texture itself) so I set 0 here
     // but maybe there are no minimaps and it defaults to sampling from texture?

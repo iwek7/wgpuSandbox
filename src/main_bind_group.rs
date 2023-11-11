@@ -44,7 +44,7 @@ pub fn create_bind_group(
     )
 }
 
-pub fn create_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
+pub fn create_bind_group_layout(device: &wgpu::Device, number_of_textures: u32) -> wgpu::BindGroupLayout {
     device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
         entries: &[
             wgpu::BindGroupLayoutEntry {
@@ -56,7 +56,7 @@ pub fn create_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout 
                     multisampled: false,
                     sample_type: wgpu::TextureSampleType::Float { filterable: true }
                 },
-                count: Some(NonZeroU32::try_from(2).unwrap()),
+                count: Some(NonZeroU32::try_from(number_of_textures).unwrap()),
             },
             wgpu::BindGroupLayoutEntry {
                 binding: 1,

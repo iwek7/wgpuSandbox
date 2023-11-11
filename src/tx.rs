@@ -1,5 +1,5 @@
-use image::GenericImageView;
 use anyhow::*;
+use image::GenericImageView;
 use crate::globals;
 
 pub struct TextureWrapper {
@@ -8,42 +8,44 @@ pub struct TextureWrapper {
 }
 
 impl TextureWrapper {
-    // todo: rework this to accept any number of textures instead of always 2
-    pub fn from_bytes(
+    pub fn multilayer_from_bytes(
         device: &wgpu::Device,
         queue: &wgpu::Queue,
-        bytes: &[u8],
-        bytes2: &[u8],
+        bytes: &[&[u8]],
         label: &str,
     ) -> Result<Self> {
-        let img = image::load_from_memory(bytes)?;
-        let img2 = image::load_from_memory(bytes2)?;
-        Self::from_image(device, queue, &img, &img2,Some(label))
+        let images: Vec<image::DynamicImage> = bytes.iter()
+            .map(|b| image::load_from_memory(*b).unwrap())
+            .collect();
+        Self::multilayer_from_images(device, queue, &images, Some(label))
     }
 
-    pub fn from_image(
+    /**
+        This creates multilayered texture from provided data.
+        Such textures are useful to bind them to texture_2d_array slot in shader so that it is
+        possible to dynamically choose which texture to render in shader.
+
+        Each individual texture is separate layer.
+        Limitation of this approach is that all images need to have same dimensions.
+    */
+    pub fn multilayer_from_images(
         device: &wgpu::Device,
         queue: &wgpu::Queue,
-        img: &image::DynamicImage,
-        img2: &image::DynamicImage,
+        images: &[image::DynamicImage],
         label: Option<&str>,
     ) -> Result<Self> {
-        let rgba = img.to_rgba8();
-        let dimensions = img.dimensions();
 
-        let rgba2 = img2.to_rgba8();
-        let dimensions2 = img2.dimensions();
-        assert!(dimensions == dimensions2, "Dimension of each image of layered textures must be the same!");
+        assert!(images.len() > 0, "Trying to create layered texture with no images");
+        let base_dimensions = images[0].dimensions();
 
-        // check binding for comment on why we are using multilayered texture
         let total_tx_size = wgpu::Extent3d {
-            width: dimensions.0,
-            height: dimensions.1,
+            width: base_dimensions.0,
+            height: base_dimensions.1,
             depth_or_array_layers: 2,
         };
         let single_layer_size = wgpu::Extent3d {
-            width: dimensions.0,
-            height: dimensions.1,
+            width: base_dimensions.0,
+            height: base_dimensions.1,
             depth_or_array_layers: 1,
         };
         let texture = device.create_texture(
@@ -59,39 +61,31 @@ impl TextureWrapper {
             }
         );
 
-        // upload first image
-        queue.write_texture(
-            wgpu::ImageCopyTexture {
-                aspect: wgpu::TextureAspect::All,
-                texture: &texture,
-                mip_level: 0,
-                origin: wgpu::Origin3d::ZERO,
-            },
-            &rgba,
-            wgpu::ImageDataLayout {
-                offset: 0,
-                bytes_per_row: Some(4 * dimensions.0),
-                rows_per_image: Some(dimensions.1),
-            },
-            single_layer_size,
-        );
+        for image_idx in 0..images.len() {
+            let image = &images[image_idx];
 
-        // upload second image
-        queue.write_texture(
-            wgpu::ImageCopyTexture {
-                aspect: wgpu::TextureAspect::All,
-                texture: &texture,
-                mip_level: 0,
-                origin: wgpu::Origin3d { x: 0, y: 0, z: 1 }, // Second layer
-            },
-            &rgba2,
-            wgpu::ImageDataLayout {
-                offset: 0,
-                bytes_per_row: Some(4 * dimensions2.0),
-                rows_per_image: Some(dimensions2.1),
-            },
-            single_layer_size,
-        );
+            // This has to match texture format
+            // todo: remove this assumption, chosen format should have assigned function to choose data from image
+            let rgba_data = image.to_rgba8();
+            assert_eq!(base_dimensions, image.dimensions(), "Dimension of each image of layered textures must be the same!");
+            queue.write_texture(
+                wgpu::ImageCopyTexture {
+                    aspect: wgpu::TextureAspect::All,
+                    texture: &texture,
+                    mip_level: 0,
+                    // z coordinate here is layer
+                    origin: wgpu::Origin3d { x: 0, y: 0, z: image_idx as u32 },
+                },
+                &rgba_data,
+                wgpu::ImageDataLayout {
+                    offset: 0,
+                    bytes_per_row: Some(4 * base_dimensions.0),
+                    rows_per_image: Some(base_dimensions.1),
+                },
+                single_layer_size,
+            );
+
+        }
 
         let view_descriptor = wgpu::TextureViewDescriptor {
             format: Some(globals::TEXTURE_FORMAT),

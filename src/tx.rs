@@ -98,6 +98,23 @@ impl TextureWrapper {
         Ok(Self { texture, view })
     }
 
+    // A depth buffer, also known as a z-buffer, is used to implement depth testing in 3D rendering.
+    // This technique ensures that closer objects are drawn in front of those
+    // that are farther away from the camera.
+    // When rendering a pixel, the GPU compares its depth value (z-value)
+    // with the corresponding value in the depth buffer.
+    // - If the existing value in the depth buffer is closer to the camera
+    //   (i.e., smaller), the new pixel is not drawn (it's occluded by something closer).
+    // - If the depth buffer position is empty (nothing has been drawn there yet)
+    //   or the existing depth value is farther away, the new pixel is drawn,
+    //   and its depth value is stored in the depth buffer.
+    // Note that the depth buffer does not inherently prevent all overdraws.
+    // In cases where objects are processed in a back-to-front order,
+    // pixels from objects in the back are drawn and then potentially overwritten by nearer objects.
+    // While this results in overdraw, the final rendered image correctly reflects the nearest visible surfaces.
+    // Advanced techniques like early Z-testing/Z-culling can help
+    // minimize such overdraw by discarding fragments that would be occluded before running fragment shaders.
+    // todo: what is early z-testing / z-culling ?
     pub fn create_depth_texture(device: &wgpu::Device, config: &wgpu::SurfaceConfiguration, label: &str) -> Self {
         let size = wgpu::Extent3d {
             width: config.width,

@@ -47,7 +47,7 @@ fn vs_main(
 
 
 @group(0) @binding(0)
-var myTextures: texture_2d_array<f32>;
+var my_textures: texture_2d_array<f32>;
 @group(0) @binding(1)
 var linear_sampler: sampler;
 @group(0) @binding(2)
@@ -67,9 +67,9 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     // as I understand I have one minimap per texture for now (texture itself) so I set 0 here
     // but maybe there are no minimaps and it defaults to sampling from texture?
     // who knows, for now I do not know almost anything about minimaps
-       return textureSampleLevel(t_diffuse, linear_sampler, in.tex_coords,texture_index, 0.0);
+       return textureSampleLevel(my_textures, linear_sampler, in.tex_coords, in.texture_index, 0.0);
     } else {
-       return textureSampleLevel(t_diffuse, nearest_sampler, in.tex_coords,texture_index, 0.0);
+       return textureSampleLevel(my_textures, nearest_sampler, in.tex_coords, in.texture_index, 0.0);
     }
 }
 

@@ -1,5 +1,6 @@
 use std::num::NonZeroU32;
 use wgpu::{StorageTextureAccess};
+use winit::window::CursorIcon::Default;
 use crate::{globals,};
 
 // My understanding of bind group is that it simply contains all the data that is entering shader.
@@ -45,17 +46,11 @@ pub fn create_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout 
             wgpu::BindGroupLayoutEntry {
                 binding: 0,
                 visibility: wgpu::ShaderStages::FRAGMENT,
-                ty: wgpu::BindingType::StorageTexture {
-                    // Apparently one can read and write to storage texture.
-                    // It is one of the ways for GPU to commute w CPU.
-                    // This setting (I think) dictates access right for this binding for CPU.
-                    // To add to this by default WGPU does not support
-                    // ReadOnly and WriteOnly so I don't really have too much choice while setting this
-                    access: StorageTextureAccess::WriteOnly,
-                    // see const for doc
-                    format: globals::TEXTURE_FORMAT,
+                ty: wgpu::BindingType::Texture {
                     // It is another thing that informs GPU about data layout, I think.
-                    view_dimension: wgpu::TextureViewDimension::D2,
+                    view_dimension: wgpu::TextureViewDimension::D2Array,
+                    multisampled: false,
+                    sample_type: wgpu::TextureSampleType::Float { filterable: true }
                 },
                 count: Some(NonZeroU32::try_from(2).unwrap()),
             },

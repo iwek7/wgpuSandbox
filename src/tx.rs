@@ -40,9 +40,7 @@ impl TextureWrapper {
                 sample_count: 1,
                 dimension: wgpu::TextureDimension::D2,
                 format: globals::TEXTURE_FORMAT,
-                usage: wgpu::TextureUsages::TEXTURE_BINDING |
-                    wgpu::TextureUsages::COPY_DST |
-                    wgpu::TextureUsages::STORAGE_BINDING,
+                usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
                 view_formats: &[],
             }
         );

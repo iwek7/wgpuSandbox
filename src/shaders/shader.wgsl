@@ -52,36 +52,25 @@ var my_textures: texture_2d_array<f32>;
 var linear_sampler: sampler;
 @group(0) @binding(2)
 var nearest_sampler: sampler;
-@group(0) @binding(3)
-var depth_buffer_texture: texture_2d<f32>;
-@group(0) @binding(4)
-var depth_buffer_sampler: sampler;
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
-    // See this to know why I use textureSampleLevel instead of textureSample.
-    // https://stackoverflow.com/questions/77100370/how-to-conditionally-sample-a-texture-in-wgsl
-    //
-    // Apparently you can't use textureSample in conditional logic because of some Uniformity requirements.
-    // See this https://www.w3.org/TR/WGSL/#uniformity
-    //
-    // As I vaugly understand it has something to do with the fact that this code can't be run
-    // trully concurrently?
-//    if(in.use_linear_sampler == 1) {
-//    // as I understand I have one minimap per texture for now (texture itself) so I set 0 here
-//    // but maybe there are no minimaps and it defaults to sampling from texture?
-//    // who knows, for now I do not know almost anything about minimaps
-//       return textureSampleLevel(my_textures, linear_sampler, in.tex_coords, in.texture_index, 0.0);
-//    } else {
-//       return textureSampleLevel(my_textures, nearest_sampler, in.tex_coords, in.texture_index, 0.0);
-//    }
-
+//     See this to know why I use textureSampleLevel instead of textureSample.
+//     https://stackoverflow.com/questions/77100370/how-to-conditionally-sample-a-texture-in-wgsl
 //
-//          let near = 0.1;
-//          let far = 100.0;
-//          let depth =.x;
-//          let r = (2.0 * near) / (far + near - depth * (far - near));
-          return textureSample(depth_buffer_texture, depth_buffer_sampler, in.tex_coords);
+//     Apparently you can't use textureSample in conditional logic because of some Uniformity requirements.
+//     See this https://www.w3.org/TR/WGSL/#uniformity
+//
+//     As I vaugly understand it has something to do with the fact that this code can't be run
+//     trully concurrently?
+    if(in.use_linear_sampler == 1) {
+    // as I understand I have one minimap per texture for now (texture itself) so I set 0 here
+    // but maybe there are no minimaps and it defaults to sampling from texture?
+    // who knows, for now I do not know almost anything about minimaps
+       return textureSampleLevel(my_textures, linear_sampler, in.tex_coords, in.texture_index, 0.0);
+    } else {
+       return textureSampleLevel(my_textures, nearest_sampler, in.tex_coords, in.texture_index, 0.0);
+    }
 }
 
 

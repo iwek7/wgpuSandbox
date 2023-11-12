@@ -1,13 +1,14 @@
-pub struct CustomInstance {
+pub struct MainInstance {
     pub position: cgmath::Vector3<f32>,
     pub rotation: cgmath::Quaternion<f32>,
     pub use_linear_sampler: bool,
     pub texture_index: i32
 }
 
-impl CustomInstance {
-    pub fn to_raw(&self) -> InstanceRaw {
-        InstanceRaw {
+
+impl MainInstance {
+    pub fn to_raw(&self) -> MainInstanceRaw {
+        MainInstanceRaw {
             model: (cgmath::Matrix4::from_translation(self.position) * cgmath::Matrix4::from(self.rotation)).into(),
             use_linear_sampler: {
                 if self.use_linear_sampler {
@@ -23,17 +24,17 @@ impl CustomInstance {
 
 #[repr(C)]
 #[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
-pub struct InstanceRaw {
+pub struct MainInstanceRaw {
     pub model: [[f32; 4]; 4],
     pub use_linear_sampler: i32,
     pub texture_index: i32
 }
 
-impl InstanceRaw {
+impl MainInstanceRaw {
     pub fn desc() -> wgpu::VertexBufferLayout<'static> {
         use std::mem;
         wgpu::VertexBufferLayout {
-            array_stride: mem::size_of::<InstanceRaw>() as wgpu::BufferAddress,
+            array_stride: mem::size_of::<MainInstanceRaw>() as wgpu::BufferAddress,
             // We need to switch from using a step mode of Vertex to Instance
             // This means that our shaders will only change to use the next
             // instance when the shader starts processing a new instance

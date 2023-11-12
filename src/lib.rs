@@ -2,7 +2,10 @@ mod tx;
 mod camera;
 mod main_bind_group;
 mod globals;
-mod instance;
+mod main_instance;
+mod depth_state;
+mod depth_visualisation_bind_group;
+mod vertex;
 
 use cgmath::prelude::*;
 
@@ -14,48 +17,21 @@ use winit::{
 };
 
 use winit::window::Window;
-use crate::main_bind_group::{create_bind_group, create_bind_group_layout};
+use crate::main_bind_group::{create_main_bind_group, create_main_bind_group_layout};
 use crate::camera::{Camera, CameraController, CameraUniform};
-use crate::instance::InstanceRaw;
+use crate::depth_state::DepthState;
 use crate::tx::TextureWrapper;
 
 const NUM_INSTANCES_PER_ROW: u32 = 10;
 const INSTANCE_DISPLACEMENT: cgmath::Vector3<f32> = cgmath::Vector3::new(NUM_INSTANCES_PER_ROW as f32 * 0.5, 0.0, NUM_INSTANCES_PER_ROW as f32 * 0.5);
 
 
-#[repr(C)]
-#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
-struct Vertex {
-    position: [f32; 3],
-    tex_coords: [f32; 2],
-}
 
-impl Vertex {
-    fn desc() -> wgpu::VertexBufferLayout<'static> {
-        wgpu::VertexBufferLayout {
-            array_stride: std::mem::size_of::<Vertex>() as wgpu::BufferAddress,
-            step_mode: wgpu::VertexStepMode::Vertex,
-            attributes: &[
-                wgpu::VertexAttribute {
-                    offset: 0,
-                    shader_location: 0,
-                    format: wgpu::VertexFormat::Float32x3,
-                },
-                wgpu::VertexAttribute {
-                    offset: std::mem::size_of::<[f32; 3]>() as wgpu::BufferAddress,
-                    shader_location: 1,
-                    format: wgpu::VertexFormat::Float32x2,
-                }
-            ],
-        }
-    }
-}
-
-const VERTICES: &[Vertex] = &[
-    Vertex { position: [0.0, 0.0, 0.0], tex_coords: [0.0, 0.0] },
-    Vertex { position: [0.5, 0.0, 0.0], tex_coords: [1.0, 0.0] },
-    Vertex { position: [0.5, 0.5, 0.0], tex_coords: [1.0, 1.0] },
-    Vertex { position: [0.0, 0.5, 0.0], tex_coords: [0.0, 1.0] },
+const VERTICES: &[vertex::Vertex] = &[
+    vertex::Vertex { position: [0.0, 0.0, 0.0], tex_coords: [0.0, 0.0] },
+    vertex::Vertex { position: [0.5, 0.0, 0.0], tex_coords: [1.0, 0.0] },
+    vertex::Vertex { position: [0.5, 0.5, 0.0], tex_coords: [1.0, 1.0] },
+    vertex::Vertex { position: [0.0, 0.5, 0.0], tex_coords: [0.0, 1.0] },
 ];
 
 const INDICES: &[u16] = &[
@@ -89,11 +65,11 @@ struct State {
     camera_buffer: wgpu::Buffer,
     camera_bind_group: wgpu::BindGroup,
     camera_controller: CameraController,
-    instances: Vec<instance::CustomInstance>,
+    instances: Vec<main_instance::MainInstance>,
     instance_buffer: wgpu::Buffer,
     nearest_sampler: wgpu::Sampler,
     linear_sampler: wgpu::Sampler,
-    depth_texture: tx::TextureWrapper
+    depth_state: depth_state::DepthState
 
 }
 
@@ -195,41 +171,15 @@ impl State {
             &device, &queue, &all_texture_bytes, "grass.png",
         ).unwrap();
 
-        let depth_texture = tx::TextureWrapper::create_depth_texture(
-            &device, &config, "depth_texture"
-        );
-
-        let depth_texture_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-            address_mode_u: wgpu::AddressMode::ClampToEdge,
-            address_mode_v: wgpu::AddressMode::ClampToEdge,
-            address_mode_w: wgpu::AddressMode::ClampToEdge,
-            // mag_filter: wgpu::FilterMode::Linear,
-            // min_filter: wgpu::FilterMode::Linear,
-            // mipmap_filter: wgpu::FilterMode::Nearest,
-            // compare: Some(wgpu::CompareFunction::LessEqual),
-            lod_min_clamp: 0.0,
-            lod_max_clamp: 100.0,
-            ..Default::default()
-        });
-
-        let bind_group_layout = create_bind_group_layout(
+        let bind_group_layout = create_main_bind_group_layout(
             &device,
             all_texture_bytes.len() as u32,
         );
 
-        let bind_group = create_bind_group(
-            &device, &bind_group_layout, "multi texture rendering bind group",
-            &layered_texture.view, &linear_sampler, &nearest_sampler,
-            &depth_texture.view, &depth_texture_sampler
+        let bind_group = create_main_bind_group(
+            &device, &bind_group_layout, &layered_texture.view,
+            &linear_sampler, &nearest_sampler,
         );
-
-
-
-        // shortcut: let shader = device.create_shader_module(wgpu::include_wgsl!("shader.wgsl"));
-        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("Shader"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("shaders/shader.wgsl").into()),
-        });
 
         let vertex_buffer = device.create_buffer_init(
             &wgpu::util::BufferInitDescriptor {
@@ -300,6 +250,8 @@ impl State {
             label: Some("camera_bind_group"),
         });
 
+        let depth_state = DepthState::new(&device, &config);
+
 
         let instances = (0..NUM_INSTANCES_PER_ROW).flat_map(|z| {
             (0..NUM_INSTANCES_PER_ROW).map(move |x| {
@@ -314,7 +266,7 @@ impl State {
                     cgmath::Quaternion::from_axis_angle(position.normalize(), cgmath::Deg(45.0))
                 };
 
-                instance::CustomInstance {
+                main_instance::MainInstance {
                     position,
                     rotation,
                     use_linear_sampler: z % 2 == 0,
@@ -328,7 +280,7 @@ impl State {
                 }
             })
         }).collect::<Vec<_>>();
-        let instance_data = instances.iter().map(instance::CustomInstance::to_raw).collect::<Vec<_>>();
+        let instance_data = instances.iter().map(main_instance::MainInstance::to_raw).collect::<Vec<_>>();
         let instance_buffer = device.create_buffer_init(
             &wgpu::util::BufferInitDescriptor {
                 label: Some("Instance Buffer"),
@@ -337,6 +289,13 @@ impl State {
             }
         );
 
+
+        // this is the same as:
+        // let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        //     label: Some("Shader"),
+        //     source: wgpu::ShaderSource::Wgsl(include_str!("shaders/shader.wgsl").into()),
+        // });
+        let shader = device.create_shader_module(wgpu::include_wgsl!("shaders/shader.wgsl"));
 
         let render_pipeline_layout = device.create_pipeline_layout(
             &wgpu::PipelineLayoutDescriptor {
@@ -356,8 +315,8 @@ impl State {
                 module: &shader,
                 entry_point: "vs_main",
                 buffers: &[
-                    Vertex::desc(),
-                    InstanceRaw::desc()
+                    vertex::Vertex::desc(),
+                    main_instance::MainInstanceRaw::desc()
                 ],
             },
             fragment: Some(wgpu::FragmentState {
@@ -428,7 +387,7 @@ impl State {
             instance_buffer,
             linear_sampler,
             nearest_sampler,
-            depth_texture
+            depth_state
         };
     }
 
@@ -436,6 +395,7 @@ impl State {
         &self.window
     }
 
+    // todo: test if it even works
     pub fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
         if new_size.width > 0 && new_size.height > 0 {
             self.size = new_size;
@@ -443,7 +403,7 @@ impl State {
             self.config.height = new_size.height;
             self.surface.configure(&self.device, &self.config);
         }
-        self.depth_texture = tx::TextureWrapper::create_depth_texture(&self.device, &self.config, "depth_texture");
+       self.depth_state.resize(&self.device, &self.config);
     }
 
     fn input(&mut self, event: &WindowEvent) -> bool {
@@ -491,7 +451,7 @@ impl State {
                     },
                 })],
                 depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                    view: &self.depth_texture.view,
+                    view: &self.depth_state.depth_texture.view,
                     depth_ops: Some(wgpu::Operations {
                         load: wgpu::LoadOp::Clear(1.0),
                         store: true,

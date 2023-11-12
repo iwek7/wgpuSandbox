@@ -160,33 +160,6 @@ impl State {
             ..Default::default()
         };
 
-        let linear_sampler = device.create_sampler(&linear_sampler_desc);
-        let nearest_sampler = device.create_sampler(&nearest_sampler_desc);
-
-        let grass_bytes = include_bytes!("assets/grass.png");
-        let cobblestone_bytes = include_bytes!("assets/cobblestone.png");
-
-        // So here apparently include_bytes! returns type &[u8; N] and it actually picks up file
-        // in compile time so N is number of actual bytes in image (crazy!).
-        // Therefore provided byte arrays have different types (one is &[u8; x], and other is &[u8; y])
-        // by taking slices here we convert them to common type.
-        // Rust blows my mind sometimes.
-        let all_texture_bytes = [&grass_bytes[..], &cobblestone_bytes[..]];
-        let layered_texture = TextureWrapper::multilayer_from_bytes(
-            &device, &queue, &all_texture_bytes, "grass.png",
-        ).unwrap();
-
-
-        let bind_group_layout = create_bind_group_layout(
-            &device,
-            all_texture_bytes.len() as u32,
-        );
-
-        let bind_group = create_bind_group(
-            &device, &bind_group_layout, "multi texture rendering bind group",
-            &layered_texture.view, &linear_sampler, &nearest_sampler,
-        );
-
         let surface_caps = surface.get_capabilities(&adapter);
         // Shader code in this tutorial assumes an sRGB surface texture. Using a different
         // one will result all the colors coming out darker. If you want to support non
@@ -205,6 +178,52 @@ impl State {
             view_formats: vec![],
         };
         surface.configure(&device, &config);
+
+        let linear_sampler = device.create_sampler(&linear_sampler_desc);
+        let nearest_sampler = device.create_sampler(&nearest_sampler_desc);
+
+        let grass_bytes = include_bytes!("assets/grass.png");
+        let cobblestone_bytes = include_bytes!("assets/cobblestone.png");
+
+        // So here apparently include_bytes! returns type &[u8; N] and it actually picks up file
+        // in compile time so N is number of actual bytes in image (crazy!).
+        // Therefore provided byte arrays have different types (one is &[u8; x], and other is &[u8; y])
+        // by taking slices here we convert them to common type.
+        // Rust blows my mind sometimes.
+        let all_texture_bytes = [&grass_bytes[..], &cobblestone_bytes[..]];
+        let layered_texture = TextureWrapper::multilayer_from_bytes(
+            &device, &queue, &all_texture_bytes, "grass.png",
+        ).unwrap();
+
+        let depth_texture = tx::TextureWrapper::create_depth_texture(
+            &device, &config, "depth_texture"
+        );
+
+        let depth_texture_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+            address_mode_u: wgpu::AddressMode::ClampToEdge,
+            address_mode_v: wgpu::AddressMode::ClampToEdge,
+            address_mode_w: wgpu::AddressMode::ClampToEdge,
+            // mag_filter: wgpu::FilterMode::Linear,
+            // min_filter: wgpu::FilterMode::Linear,
+            // mipmap_filter: wgpu::FilterMode::Nearest,
+            // compare: Some(wgpu::CompareFunction::LessEqual),
+            lod_min_clamp: 0.0,
+            lod_max_clamp: 100.0,
+            ..Default::default()
+        });
+
+        let bind_group_layout = create_bind_group_layout(
+            &device,
+            all_texture_bytes.len() as u32,
+        );
+
+        let bind_group = create_bind_group(
+            &device, &bind_group_layout, "multi texture rendering bind group",
+            &layered_texture.view, &linear_sampler, &nearest_sampler,
+            &depth_texture.view, &depth_texture_sampler
+        );
+
+
 
         // shortcut: let shader = device.create_shader_module(wgpu::include_wgsl!("shader.wgsl"));
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
@@ -329,23 +348,6 @@ impl State {
                 push_constant_ranges: &[],
             }
         );
-
-        let depth_texture_sampler = device.create_sampler(
-            &wgpu::SamplerDescriptor {
-                address_mode_u: wgpu::AddressMode::ClampToEdge,
-                address_mode_v: wgpu::AddressMode::ClampToEdge,
-                address_mode_w: wgpu::AddressMode::ClampToEdge,
-                mag_filter: wgpu::FilterMode::Linear,
-                min_filter: wgpu::FilterMode::Linear,
-                mipmap_filter: wgpu::FilterMode::Nearest,
-                compare: Some(wgpu::CompareFunction::LessEqual),
-                lod_min_clamp: 0.0,
-                lod_max_clamp: 100.0,
-                ..Default::default()
-            }
-        );
-        let depth_texture = tx::TextureWrapper::create_depth_texture(&device, &config, "depth_texture");
-
 
         let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("Render Pipeline"),

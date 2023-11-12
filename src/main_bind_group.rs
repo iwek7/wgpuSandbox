@@ -14,6 +14,8 @@ pub fn create_bind_group(
     texture_view: &wgpu::TextureView,
     linear_sampler: &wgpu::Sampler,
     nearest_sampler: &wgpu::Sampler,
+    depth_texture_view: &wgpu::TextureView,
+    depth_texture_sampler: &wgpu::Sampler
 ) -> wgpu::BindGroup {
     device.create_bind_group(
         &wgpu::BindGroupDescriptor {
@@ -37,7 +39,15 @@ pub fn create_bind_group(
                 wgpu::BindGroupEntry {
                     binding: 2,
                     resource: wgpu::BindingResource::Sampler(nearest_sampler),
-                }
+                },
+                wgpu::BindGroupEntry {
+                    binding:3,
+                    resource: wgpu::BindingResource::TextureView(depth_texture_view)
+                },
+                wgpu::BindGroupEntry {
+                    binding: 4,
+                    resource: wgpu::BindingResource::Sampler(depth_texture_sampler),
+                },
             ],
             label: Some(label),
         }
@@ -72,6 +82,24 @@ pub fn create_bind_group_layout(device: &wgpu::Device, number_of_textures: u32) 
                 // This should match the filterable field of the
                 // corresponding Texture entry above.
                 ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 3,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Texture {
+                    view_dimension: wgpu::TextureViewDimension::D2,
+                    multisampled: false,
+                    sample_type: wgpu::TextureSampleType::Float { filterable: false }
+                },
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 4,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                // This should match the filterable field of the
+                // corresponding Texture entry above.
+                ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::NonFiltering),
                 count: None,
             },
         ],

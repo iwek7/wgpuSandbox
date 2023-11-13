@@ -111,10 +111,7 @@ impl DepthState {
                 entry_point: "fs_main",
                 targets: &[Some(wgpu::ColorTargetState {
                     format: config.format,
-                    blend: Some(wgpu::BlendState {
-                        color: wgpu::BlendComponent::REPLACE,
-                        alpha: wgpu::BlendComponent::REPLACE,
-                    }),
+                    blend: Some(wgpu::BlendState::REPLACE),
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
             }),
@@ -173,7 +170,6 @@ impl DepthState {
     }
 
     pub fn build_render_pass(&mut self,
-                             clear_color: wgpu::Color,
                              encoder: &mut wgpu::CommandEncoder,
                              texture_view: &wgpu::TextureView,
     ) {
@@ -183,6 +179,8 @@ impl DepthState {
                 view: &texture_view,
                 resolve_target: None,
                 ops: wgpu::Operations {
+                    // so if I clear color here then
+                    // all results of previous render passes will be overridern
                     load: wgpu::LoadOp::Load,
                     store: true,
                 },

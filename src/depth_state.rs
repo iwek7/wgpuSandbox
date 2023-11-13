@@ -1,3 +1,4 @@
+use wgpu::RenderPass;
 use wgpu::util::DeviceExt;
 use crate::depth_visualisation_bind_group::{create_depth_vis_bind_group, create_depth_vis_bind_group_layout};
 use crate::{tx, vertex};
@@ -29,7 +30,7 @@ const WHOLE_SCREEN_INDICES: &[u16] = &[
 impl DepthState {
     pub fn new(
         device: &wgpu::Device,
-        config: &wgpu::SurfaceConfiguration
+        config: &wgpu::SurfaceConfiguration,
     ) -> DepthState {
         let vertex_buffer = device.create_buffer_init(
             &wgpu::util::BufferInitDescriptor {
@@ -130,7 +131,7 @@ impl DepthState {
             pipeline,
             vertex_buffer,
             index_buffer,
-            num_indices
+            num_indices,
         }
     }
 
@@ -141,40 +142,31 @@ impl DepthState {
         self.depth_texture = tx::TextureWrapper::create_depth_texture(device, config, "depth_texture");
     }
 
-    fn render(&mut self,
-              queue: &wgpu::Queue,
-              device: &wgpu::Device,
-              surface: &wgpu::Surface,
-              clear_color: wgpu::Color,
-    ) -> Result<(), wgpu::SurfaceError> {
-        let output = surface.get_current_texture()?;
-        // todo maybe encoder can be passed
-        let view = output.texture.create_view(&wgpu::TextureViewDescriptor::default());
-        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("Render Encoder"),
+    pub fn build_render_pass(&mut self,
+                             queue: &wgpu::Queue,
+                             device: &wgpu::Device,
+                             surface: &wgpu::Surface,
+                             clear_color: wgpu::Color,
+                             encoder: &mut wgpu::CommandEncoder,
+                             texture_view: &wgpu::TextureView,
+    ) {
+        let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some("Depth Visualisation Render Pass"),
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view: &texture_view,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(clear_color),
+                    store: true,
+                },
+            })],
+            depth_stencil_attachment: None,
         });
-        {
-            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("Depth Visualisation Render Pass"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &view,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(clear_color),
-                        store: true,
-                    },
-                })],
-                depth_stencil_attachment: None,
-            });
 
-            render_pass.set_pipeline(&self.pipeline);
-            render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-            render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
-            render_pass.draw_indexed(0..self.num_indices, 0, 0..1);
-        }
-        queue.submit(std::iter::once(encoder.finish()));
-        output.present();
-
-        Ok(())
+        render_pass.set_pipeline(&self.pipeline);
+        render_pass.set_bind_group(0, &self.bind_group, &[]);
+        render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+        render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+        render_pass.draw_indexed(0..self.num_indices, 0, 0..1);
     }
 }

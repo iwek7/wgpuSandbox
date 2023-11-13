@@ -26,7 +26,6 @@ const NUM_INSTANCES_PER_ROW: u32 = 10;
 const INSTANCE_DISPLACEMENT: cgmath::Vector3<f32> = cgmath::Vector3::new(NUM_INSTANCES_PER_ROW as f32 * 0.5, 0.0, NUM_INSTANCES_PER_ROW as f32 * 0.5);
 
 
-
 const VERTICES: &[vertex::Vertex] = &[
     vertex::Vertex { position: [0.0, 0.0, 0.0], tex_coords: [0.0, 0.0] },
     vertex::Vertex { position: [0.5, 0.0, 0.0], tex_coords: [1.0, 0.0] },
@@ -55,7 +54,7 @@ struct State {
     num_indices: u32,
     cursor_in: bool,
     layered_texture: TextureWrapper,
-    texture_swap: bool,
+    depth_visualisation: bool,
 
     // this is responsible for drawing everything but camera
     main_bind_group: wgpu::BindGroup,
@@ -69,8 +68,7 @@ struct State {
     instance_buffer: wgpu::Buffer,
     nearest_sampler: wgpu::Sampler,
     linear_sampler: wgpu::Sampler,
-    depth_state: depth_state::DepthState
-
+    depth_state: depth_state::DepthState,
 }
 
 impl State {
@@ -255,8 +253,7 @@ impl State {
 
         let instances = (0..NUM_INSTANCES_PER_ROW).flat_map(|z| {
             (0..NUM_INSTANCES_PER_ROW).map(move |x| {
-
-                let position = cgmath::Vector3 { x: x as f32, y: 0.0, z: NUM_INSTANCES_PER_ROW as f32- z as f32 } - INSTANCE_DISPLACEMENT;
+                let position = cgmath::Vector3 { x: x as f32, y: 0.0, z: NUM_INSTANCES_PER_ROW as f32 - z as f32 } - INSTANCE_DISPLACEMENT;
                 println!("position {} {} {}", position.x, position.y, position.z);
                 let rotation = if position.is_zero() {
                     // this is needed so an object at (0, 0, 0) won't get scaled to zero
@@ -376,7 +373,7 @@ impl State {
             num_indices,
             cursor_in,
             layered_texture,
-            texture_swap,
+            depth_visualisation: texture_swap,
             main_bind_group: bind_group,
             camera,
             camera_uniform,
@@ -387,7 +384,7 @@ impl State {
             instance_buffer,
             linear_sampler,
             nearest_sampler,
-            depth_state
+            depth_state,
         };
     }
 
@@ -403,7 +400,7 @@ impl State {
             self.config.height = new_size.height;
             self.surface.configure(&self.device, &self.config);
         }
-       self.depth_state.resize(&self.device, &self.config);
+        self.depth_state.resize(&self.device, &self.config);
     }
 
     fn input(&mut self, event: &WindowEvent) -> bool {
@@ -423,54 +420,63 @@ impl State {
             label: Some("Render Encoder"),
         });
 
+        let clear_color: wgpu::Color = if self.cursor_in {
+            wgpu::Color {
+                r: 0.1,
+                g: 0.2,
+                b: 0.3,
+                a: 1.0,
+            }
+        } else {
+            wgpu::Color {
+                r: 0.2,
+                g: 0.5,
+                b: 0.1,
+                a: 1.0,
+            }
+        };
         {
-            let clear_color: wgpu::Color = if self.cursor_in {
-                wgpu::Color {
-                    r: 0.1,
-                    g: 0.2,
-                    b: 0.3,
-                    a: 1.0,
-                }
-            } else {
-                wgpu::Color {
-                    r: 0.2,
-                    g: 0.5,
-                    b: 0.1,
-                    a: 1.0,
-                }
-            };
-
-            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("Render Pass"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &view,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(clear_color),
-                        store: true,
-                    },
-                })],
-                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                    view: &self.depth_state.depth_texture.view,
-                    depth_ops: Some(wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(1.0),
-                        store: true,
+            {
+                let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: Some("Render Pass"),
+                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                        view: &view,
+                        resolve_target: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Clear(clear_color),
+                            store: true,
+                        },
+                    })],
+                    depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                        view: &self.depth_state.depth_texture.view,
+                        depth_ops: Some(wgpu::Operations {
+                            load: wgpu::LoadOp::Clear(1.0),
+                            store: true,
+                        }),
+                        stencil_ops: None,
                     }),
-                    stencil_ops: None,
-                }),
-            });
+                });
 
-            render_pass.set_pipeline(&self.render_pipeline);
-            render_pass.set_bind_group(0, &self.main_bind_group, &[]);
-            render_pass.set_bind_group(1, &self.camera_bind_group, &[]);
-            render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-            render_pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
-            render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
-            render_pass.draw_indexed(0..self.num_indices, 0, 0..self.instances.len() as _);
+                render_pass.set_pipeline(&self.render_pipeline);
+                render_pass.set_bind_group(0, &self.main_bind_group, &[]);
+                render_pass.set_bind_group(1, &self.camera_bind_group, &[]);
+                render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+                render_pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
+                render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+                render_pass.draw_indexed(0..self.num_indices, 0, 0..self.instances.len() as _);
+            }
+            // submit will accept anything that implements IntoIter
+            self.queue.submit(std::iter::once(encoder.finish()));
         }
 
-        // submit will accept anything that implements IntoIter
-        self.queue.submit(std::iter::once(encoder.finish()));
+        if self.depth_visualisation {
+            let mut depth_command_encoder = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("Render Encoder"),
+            });
+            self.depth_state.build_render_pass(&self.queue, &self.device, &self.surface, clear_color, &mut depth_command_encoder, &view);
+            self.queue.submit(std::iter::once(depth_command_encoder.finish()));
+        }
+
         output.present();
 
         Ok(())
@@ -512,7 +518,7 @@ pub async fn run() {
                                 ..
                             },
                             ..
-                        } => state.texture_swap = !state.texture_swap,
+                        } => state.depth_visualisation = !state.depth_visualisation,
                         WindowEvent::Resized(physical_size) => {
                             state.resize(*physical_size);
                         }

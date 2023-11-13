@@ -24,7 +24,20 @@ var depth_buffer_texture: texture_2d<f32>;
 var depth_buffer_sampler: sampler;
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
-    return textureSample(depth_buffer_texture, depth_buffer_sampler, in.tex_coords);
+   // Sample the depth buffer texture
+    let depthValue = textureSample(depth_buffer_texture, depth_buffer_sampler, in.tex_coords).r;
+
+    // Decide the color based on the depth value
+    var color: vec4<f32>;
+    if (depthValue == 1.0) {
+        // If the depth value is 1.0 (far plane), render white
+        color = vec4<f32>(1.0, 1.0, 1.0, 1.0);
+    } else {
+        // Otherwise, render black
+        color = vec4<f32>(0.0, 0.0, 0.0, 1.0);
+    }
+
+    return color;
 }
 
 

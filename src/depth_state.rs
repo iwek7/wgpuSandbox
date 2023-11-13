@@ -1,4 +1,3 @@
-use wgpu::RenderPass;
 use wgpu::util::DeviceExt;
 use crate::depth_visualisation_bind_group::{create_depth_vis_bind_group, create_depth_vis_bind_group_layout};
 use crate::{tx, vertex};

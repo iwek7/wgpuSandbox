@@ -473,7 +473,7 @@ impl State {
             let mut depth_command_encoder = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some("Render Encoder"),
             });
-            self.depth_state.build_render_pass(&self.queue, &self.device, &self.surface, clear_color, &mut depth_command_encoder, &view);
+            self.depth_state.build_render_pass(clear_color, &mut depth_command_encoder, &view);
             self.queue.submit(std::iter::once(depth_command_encoder.finish()));
         }
 
@@ -482,7 +482,6 @@ impl State {
         Ok(())
     }
 }
-
 
 pub async fn run() {
     env_logger::init();

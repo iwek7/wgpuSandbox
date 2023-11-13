@@ -10,11 +10,11 @@ struct VertexOutput {
 
 @vertex
 fn vs_main(
-    in: VertexInput
+    model: VertexInput
 ) -> VertexOutput {
     var out: VertexOutput;
-    out.tex_coords = in.tex_coords;
-    out.clip_position = vec4<f32>(in.position.x, in.position.y, 0.0, 1.0);
+    out.tex_coords = model.tex_coords;
+    out.clip_position = vec4<f32>(model.position, 1.0);
     return out;
 }
 
@@ -24,12 +24,7 @@ var depth_buffer_texture: texture_2d<f32>;
 var depth_buffer_sampler: sampler;
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
-//
-//          let near = 0.1;
-//          let far = 100.0;
-//          let depth =.x;
-//          let r = (2.0 * near) / (far + near - depth * (far - near));
-          return textureSample(depth_buffer_texture, depth_buffer_sampler, in.tex_coords);
+    return textureSample(depth_buffer_texture, depth_buffer_sampler, in.tex_coords);
 }
 
 

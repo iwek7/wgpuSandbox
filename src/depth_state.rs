@@ -6,6 +6,7 @@ use crate::{tx, vertex};
 pub struct DepthState {
     pub depth_texture: tx::TextureWrapper,
     depth_sampler: wgpu::Sampler,
+    bind_group_layout: wgpu::BindGroupLayout,
     bind_group: wgpu::BindGroup,
     pipeline: wgpu::RenderPipeline,
     vertex_buffer: wgpu::Buffer,
@@ -15,15 +16,26 @@ pub struct DepthState {
 
 
 const WHOLE_SCREEN_VERTICES: &[vertex::Vertex] = &[
-    vertex::Vertex { position: [-1.0, -1.0, 0.0], tex_coords: [0.0, 0.0] },
-    vertex::Vertex { position: [1.0, -1.0, 0.0], tex_coords: [1.0, 0.0] },
-    vertex::Vertex { position: [1.0, 1.0, 0.0], tex_coords: [1.0, 1.0] },
-    vertex::Vertex { position: [-1.0, 1.0, 0.0], tex_coords: [0.0, 1.0] },
+    vertex::Vertex {
+        position: [0.0, 0.0, 0.0],
+        tex_coords: [0.0, 1.0],
+    },
+    vertex::Vertex {
+        position: [1.0, 0.0, 0.0],
+        tex_coords: [1.0, 1.0],
+    },
+    vertex::Vertex {
+        position: [1.0, 1.0, 0.0],
+        tex_coords: [1.0, 0.0],
+    },
+    vertex::Vertex {
+        position: [0.0, 1.0, 0.0],
+        tex_coords: [0.0, 0.0],
+    },
 ];
 
 const WHOLE_SCREEN_INDICES: &[u16] = &[
-    0, 1, 2,
-    2, 3, 0,
+    0, 1, 2, 0, 2, 3
 ];
 
 
@@ -85,7 +97,7 @@ impl DepthState {
         );
 
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("Render Pipeline"),
+            label: Some("Depth Pass Render Pipeline"),
             layout: Some(&render_pipeline_layout),
             vertex: wgpu::VertexState {
                 module: &shader,
@@ -99,7 +111,10 @@ impl DepthState {
                 entry_point: "fs_main",
                 targets: &[Some(wgpu::ColorTargetState {
                     format: config.format,
-                    blend: Some(wgpu::BlendState::REPLACE),
+                    blend: Some(wgpu::BlendState {
+                        color: wgpu::BlendComponent::REPLACE,
+                        alpha: wgpu::BlendComponent::REPLACE,
+                    }),
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
             }),
@@ -127,6 +142,7 @@ impl DepthState {
         Self {
             depth_texture,
             depth_sampler,
+            bind_group_layout,
             bind_group,
             pipeline,
             vertex_buffer,
@@ -140,12 +156,23 @@ impl DepthState {
                   config: &wgpu::SurfaceConfiguration,
     ) {
         self.depth_texture = tx::TextureWrapper::create_depth_texture(device, config, "depth_texture");
+        self.bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: &self.bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&self.depth_texture.view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&self.depth_sampler),
+                },
+            ],
+            label: Some("depth_pass.bind_group"),
+        });
     }
 
     pub fn build_render_pass(&mut self,
-                             queue: &wgpu::Queue,
-                             device: &wgpu::Device,
-                             surface: &wgpu::Surface,
                              clear_color: wgpu::Color,
                              encoder: &mut wgpu::CommandEncoder,
                              texture_view: &wgpu::TextureView,
@@ -156,7 +183,7 @@ impl DepthState {
                 view: &texture_view,
                 resolve_target: None,
                 ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(clear_color),
+                    load: wgpu::LoadOp::Load,
                     store: true,
                 },
             })],

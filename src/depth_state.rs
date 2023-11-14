@@ -1,6 +1,7 @@
 use wgpu::util::DeviceExt;
 use crate::depth_visualisation_bind_group::{create_depth_vis_bind_group, create_depth_vis_bind_group_layout};
-use crate::{tx, vertex};
+use crate::{tx, model};
+use crate::model::ModelVertex;
 
 pub struct DepthState {
     pub depth_texture: tx::TextureWrapper,
@@ -14,22 +15,26 @@ pub struct DepthState {
 }
 
 
-const WHOLE_SCREEN_VERTICES: &[vertex::Vertex] = &[
-    vertex::Vertex {
+const WHOLE_SCREEN_VERTICES: &[model::ModelVertex] = &[
+    model::ModelVertex {
         position: [0.0, 0.0, 0.0],
         tex_coords: [0.0, 1.0],
+        normal: [0.0, 0.0, 0.0]
     },
-    vertex::Vertex {
+    model::ModelVertex {
         position: [1.0, 0.0, 0.0],
         tex_coords: [1.0, 1.0],
+        normal: [0.0, 0.0, 0.0]
     },
-    vertex::Vertex {
+    model::ModelVertex {
         position: [1.0, 1.0, 0.0],
         tex_coords: [1.0, 0.0],
+        normal: [0.0, 0.0, 0.0]
     },
-    vertex::Vertex {
+    model::ModelVertex {
         position: [0.0, 1.0, 0.0],
         tex_coords: [0.0, 0.0],
+        normal: [0.0, 0.0, 0.0]
     },
 ];
 
@@ -102,7 +107,7 @@ impl DepthState {
                 module: &shader,
                 entry_point: "vs_main",
                 buffers: &[
-                    vertex::Vertex::desc()
+                    <ModelVertex as model::Vertex>::desc()
                 ],
             },
             fragment: Some(wgpu::FragmentState {

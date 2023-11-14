@@ -5,7 +5,8 @@ mod globals;
 mod main_instance;
 mod depth_state;
 mod depth_visualisation_bind_group;
-mod vertex;
+mod model;
+mod resources;
 
 use cgmath::prelude::*;
 
@@ -20,23 +21,11 @@ use winit::window::Window;
 use crate::main_bind_group::{create_main_bind_group, create_main_bind_group_layout};
 use crate::camera::{Camera, CameraController, CameraUniform};
 use crate::depth_state::DepthState;
+use crate::model::{DrawModel, ModelVertex};
 use crate::tx::TextureWrapper;
 
 const NUM_INSTANCES_PER_ROW: u32 = 10;
 const INSTANCE_DISPLACEMENT: cgmath::Vector3<f32> = cgmath::Vector3::new(NUM_INSTANCES_PER_ROW as f32 * 0.5, 0.0, NUM_INSTANCES_PER_ROW as f32 * 0.5);
-
-
-const VERTICES: &[vertex::Vertex] = &[
-    vertex::Vertex { position: [0.0, 0.0, 0.0], tex_coords: [0.0, 0.0] },
-    vertex::Vertex { position: [0.5, 0.0, 0.0], tex_coords: [1.0, 0.0] },
-    vertex::Vertex { position: [0.5, 0.5, 0.0], tex_coords: [1.0, 1.0] },
-    vertex::Vertex { position: [0.0, 0.5, 0.0], tex_coords: [0.0, 1.0] },
-];
-
-const INDICES: &[u16] = &[
-    0, 1, 2,
-    2, 3, 0,
-];
 
 struct State {
     surface: wgpu::Surface,
@@ -49,9 +38,6 @@ struct State {
     // unsafe references to the window's resources.
     window: Window,
     render_pipeline: wgpu::RenderPipeline,
-    vertex_buffer: wgpu::Buffer,
-    index_buffer: wgpu::Buffer,
-    num_indices: u32,
     cursor_in: bool,
     layered_texture: TextureWrapper,
     depth_visualisation: bool,
@@ -69,6 +55,7 @@ struct State {
     nearest_sampler: wgpu::Sampler,
     linear_sampler: wgpu::Sampler,
     depth_state: depth_state::DepthState,
+    model: model::Model,
 }
 
 impl State {
@@ -169,32 +156,15 @@ impl State {
             &device, &queue, &all_texture_bytes, "grass.png",
         ).unwrap();
 
-        let bind_group_layout = create_main_bind_group_layout(
+        let main_bind_group_layout = create_main_bind_group_layout(
             &device,
             all_texture_bytes.len() as u32,
         );
 
-        let bind_group = create_main_bind_group(
-            &device, &bind_group_layout, &layered_texture.view,
+        let main_bind_group = create_main_bind_group(
+            &device, &main_bind_group_layout, &layered_texture.view,
             &linear_sampler, &nearest_sampler,
         );
-
-        let vertex_buffer = device.create_buffer_init(
-            &wgpu::util::BufferInitDescriptor {
-                label: Some("Vertex Buffer"),
-                contents: bytemuck::cast_slice(VERTICES),
-                usage: wgpu::BufferUsages::VERTEX,
-            }
-        );
-
-        let index_buffer = device.create_buffer_init(
-            &wgpu::util::BufferInitDescriptor {
-                label: Some("Index Buffer"),
-                contents: bytemuck::cast_slice(INDICES),
-                usage: wgpu::BufferUsages::INDEX,
-            }
-        );
-        let num_indices = INDICES.len() as u32;
 
         let camera = Camera {
             // position the camera one unit up and 2 units back
@@ -254,7 +224,6 @@ impl State {
         let instances = (0..NUM_INSTANCES_PER_ROW).flat_map(|z| {
             (0..NUM_INSTANCES_PER_ROW).map(move |x| {
                 let position = cgmath::Vector3 { x: x as f32, y: 0.0, z: NUM_INSTANCES_PER_ROW as f32 - z as f32 } - INSTANCE_DISPLACEMENT;
-                println!("position {} {} {}", position.x, position.y, position.z);
                 let rotation = if position.is_zero() {
                     // this is needed so an object at (0, 0, 0) won't get scaled to zero
                     // as Quaternions can effect scale if they're not created correctly
@@ -298,7 +267,7 @@ impl State {
             &wgpu::PipelineLayoutDescriptor {
                 label: Some("Render Pipeline Layout"),
                 bind_group_layouts: &[
-                    &bind_group_layout,
+                    &main_bind_group_layout,
                     &camera_bind_group_layout,
                 ],
                 push_constant_ranges: &[],
@@ -312,7 +281,7 @@ impl State {
                 module: &shader,
                 entry_point: "vs_main",
                 buffers: &[
-                    vertex::Vertex::desc(),
+                    <ModelVertex as model::Vertex>::desc(),
                     main_instance::MainInstanceRaw::desc()
                 ],
             },
@@ -356,9 +325,17 @@ impl State {
 
         let cursor_in = true;
 
-        let texture_swap = false;
+        let depth_visualisation = false;
 
         let camera_controller = CameraController::new(0.2);
+
+        let obj_model =
+            resources::load_model(
+                "assets/cube.obj", &device, &queue,
+                &main_bind_group_layout, &linear_sampler, &nearest_sampler)
+                .await
+                .unwrap();
+
 
         return Self {
             window,
@@ -368,13 +345,10 @@ impl State {
             config,
             size,
             render_pipeline,
-            vertex_buffer,
-            index_buffer,
-            num_indices,
             cursor_in,
             layered_texture,
-            depth_visualisation: texture_swap,
-            main_bind_group: bind_group,
+            depth_visualisation,
+            main_bind_group,
             camera,
             camera_uniform,
             camera_buffer,
@@ -385,6 +359,7 @@ impl State {
             linear_sampler,
             nearest_sampler,
             depth_state,
+            model: obj_model,
         };
     }
 
@@ -460,10 +435,8 @@ impl State {
                 render_pass.set_pipeline(&self.render_pipeline);
                 render_pass.set_bind_group(0, &self.main_bind_group, &[]);
                 render_pass.set_bind_group(1, &self.camera_bind_group, &[]);
-                render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
                 render_pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
-                render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
-                render_pass.draw_indexed(0..self.num_indices, 0, 0..self.instances.len() as _);
+                render_pass.draw_mesh_instanced(&self.model.meshes[0], 0..self.instances.len() as u32);
             }
             // submit will accept anything that implements IntoIter
             self.queue.submit(std::iter::once(encoder.finish()));

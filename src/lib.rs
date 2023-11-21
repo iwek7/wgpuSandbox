@@ -143,8 +143,8 @@ impl State {
         let linear_sampler = device.create_sampler(&linear_sampler_desc);
         let nearest_sampler = device.create_sampler(&nearest_sampler_desc);
 
-        let grass_bytes = include_bytes!("assets/grass.png");
-        let cobblestone_bytes = include_bytes!("assets/cobblestone.png");
+        let grass_bytes = include_bytes!("../res/grass.png");
+        let cobblestone_bytes = include_bytes!("../res/cobblestone.png");
 
         // So here apparently include_bytes! returns type &[u8; N] and it actually picks up file
         // in compile time so N is number of actual bytes in image (crazy!).
@@ -331,7 +331,7 @@ impl State {
 
         let obj_model =
             resources::load_model(
-                "assets/cube.obj", &device, &queue,
+                "cube.obj", &device, &queue,
                 &main_bind_group_layout, &linear_sampler, &nearest_sampler)
                 .await
                 .unwrap();

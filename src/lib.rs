@@ -25,7 +25,7 @@ use crate::model::{DrawModel, ModelVertex};
 use crate::tx::TextureWrapper;
 
 const NUM_INSTANCES_PER_ROW: u32 = 10;
-const INSTANCE_DISPLACEMENT: cgmath::Vector3<f32> = cgmath::Vector3::new(NUM_INSTANCES_PER_ROW as f32 * 0.5, 0.0, NUM_INSTANCES_PER_ROW as f32 * 0.5);
+const SPACE_BETWEEN_INSTANCES: f32 = 3.0;
 
 struct State {
     surface: wgpu::Surface,
@@ -223,10 +223,12 @@ impl State {
 
         let instances = (0..NUM_INSTANCES_PER_ROW).flat_map(|z| {
             (0..NUM_INSTANCES_PER_ROW).map(move |x| {
-                let position = cgmath::Vector3 { x: x as f32, y: 0.0, z: NUM_INSTANCES_PER_ROW as f32 - z as f32 } - INSTANCE_DISPLACEMENT;
+                let x = SPACE_BETWEEN_INSTANCES * (x as f32 - NUM_INSTANCES_PER_ROW as f32 / 2.0);
+                let z = SPACE_BETWEEN_INSTANCES * (z as f32 - NUM_INSTANCES_PER_ROW as f32 / 2.0);
+
+                let position = cgmath::Vector3 { x, y: 0.0, z };
+
                 let rotation = if position.is_zero() {
-                    // this is needed so an object at (0, 0, 0) won't get scaled to zero
-                    // as Quaternions can effect scale if they're not created correctly
                     cgmath::Quaternion::from_axis_angle(cgmath::Vector3::unit_z(), cgmath::Deg(0.0))
                 } else {
                     cgmath::Quaternion::from_axis_angle(position.normalize(), cgmath::Deg(45.0))
@@ -235,9 +237,9 @@ impl State {
                 main_instance::MainInstance {
                     position,
                     rotation,
-                    use_linear_sampler: z % 2 == 0,
+                    use_linear_sampler: (z as i32) % 2 == 1,
                     texture_index: {
-                        if z % 2 == 0 {
+                        if (z as i32) % 2 == 0 {
                             1
                         } else {
                             0
@@ -438,17 +440,17 @@ impl State {
                 render_pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
                 render_pass.draw_mesh_instanced(&self.model.meshes[0], 0..self.instances.len() as u32);
             }
-            // submit will accept anything that implements IntoIter
-            self.queue.submit(std::iter::once(encoder.finish()));
+
         }
 
         if self.depth_visualisation {
-            let mut depth_command_encoder = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("Render Encoder"),
-            });
-            self.depth_state.build_render_pass(&mut depth_command_encoder, &view);
-            self.queue.submit(std::iter::once(depth_command_encoder.finish()));
+            // note that we can (and should) use single encoder to pass all command to gpu
+            // for instance multiple render passes
+            self.depth_state.build_render_pass(&mut encoder, &view);
         }
+
+        // submit will accept anything that implements IntoIter
+        self.queue.submit(std::iter::once(encoder.finish()));
 
         output.present();
 
